@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Image & PDF Converter</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--mut:#667;--ac:#4f46e5;--bd:#dde1ee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12141c;--card:#1c1f2b;--tx:#eceef6;--mut:#99a;--ac:#8b85ff;--bd:#2d3244}}
+:root[data-theme="dark"]{--bg:#12141c;--card:#1c1f2b;--tx:#eceef6;--mut:#99a;--ac:#8b85ff;--bd:#2d3244}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.4rem;margin:0 0 4px}p.s{color:var(--mut);margin:0 0 16px;font-size:.9rem}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.tabs button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 12px;border-radius:999px;cursor:pointer;font-size:.85rem}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+label{display:block;margin:12px 0 4px;font-size:.85rem;color:var(--mut)}
+input[type=file],input[type=number],select{width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+input[type=range]{width:100%}
+.go{margin-top:16px;width:100%;padding:12px;border:0;border-radius:10px;background:var(--ac);color:#fff;font-size:1rem;cursor:pointer}
+.go:disabled{opacity:.5}
+#out{margin-top:14px}
+.r{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--bd);font-size:.88rem;word-break:break-all}
+.r a{color:var(--ac);font-weight:600;white-space:nowrap}
+.note{font-size:.8rem;color:var(--mut);margin-top:10px}
+</style></head><body><main>
+<h1>Image & PDF Converter</h1>
+<p class="s">Everything runs in your browser. Files never leave your device.</p>
+<div class="tabs" id="tabs"></div>
+<div class="card"><div id="opts"></div><button class="go" id="go">Convert</button><div id="status" class="note"></div></div>
+<div id="out"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const kb=n=>n>1048576?(n/1048576).toFixed(2)+' MB':(n/1024).toFixed(1)+' KB';
+const T={
+ i2p:{n:'Image → PDF',acc:'image/*',multi:1,extra:'',note:'Select one or more images; each becomes a page.'},
+ p2i:{n:'PDF → Image',acc:'application/pdf',extra:'<label>Format</label><select id="fmt"><option value="png">PNG</option><option value="jpeg">JPG</option></select><label>Quality (scale)</label><select id="sc"><option value="1.5">Normal</option><option value="2" selected>High</option><option value="3">Very high</option></select>',note:'Every page is saved as a separate image.'},
+ ci:{n:'Compress Image',acc:'image/*',multi:1,extra:'<label>Quality: <b id="qv">60</b>%</label><input type="range" id="q" min="10" max="95" value="60" oninput="qv.textContent=this.value"><label>Max width in px (optional)</label><input type="number" id="mw" placeholder="e.g. 1280">',note:'Output is JPG.'},
+ cp:{n:'Compress PDF',acc:'application/pdf',extra:'<label>Quality: <b id="qv">60</b>%</label><input type="range" id="q" min="10" max="95" value="60" oninput="qv.textContent=this.value"><label>Page resolution</label><select id="sc"><option value="1">Low (smallest)</option><option value="1.5" selected>Medium</option><option value="2">High</option></select>',note:'Pages are re-rendered as images, so text will no longer be selectable.'},
+ ip:{n:'Increase PDF Size',acc:'application/pdf',extra:'<label>Target size (KB)</label><input type="number" id="kb" value="500" min="1">',note:'Pads the file to the target size. The PDF opens exactly the same.'},
+ ii:{n:'Increase Image Size',acc:'image/*',multi:1,extra:'<label>Target size (KB)</label><input type="number" id="kb" value="200" min="1">',note:'Pads the file to the target size. The image looks exactly the same.'}
+};
+let cur='i2p';
+function show(k){cur=k;$('#opts').innerHTML=`<label>Choose file${T[k].multi?'s':''}</label><input type="file" id="f" accept="${T[k].acc}" ${T[k].multi?'multiple':''}>`+T[k].extra+`<div class="note">${T[k].note}</div>`;
+ [...$('#tabs').children].forEach(b=>b.classList.toggle('on',b.dataset.k==k));$('#out').innerHTML='';$('#status').textContent=''}
+for(const k in T){const b=document.createElement('button');b.textContent=T[k].n;b.dataset.k=k;b.onclick=()=>show(k);$('#tabs').append(b)}
+const load=f=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(f)});
+const blob=(c,t,q)=>new Promise(r=>c.toBlob(r,t,q));
+const row=(name,b,note)=>{const u=URL.createObjectURL(b);$('#out').insertAdjacentHTML('beforeend',`<div class="r card" style="border-radius:0;border-width:1px 0 0"><span>${name}<br><small style="color:var(--mut)">${kb(b.size)}${note||''}</small></span><a href="${u}" download="${name}">Download</a></div>`)};
+const base=n=>n.replace(/\.[^.]+$/,'');
+const pdfOf=async f=>pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+async function pageCanvas(pg,s){const v=pg.getViewport({scale:s});const c=document.createElement('canvas');c.width=v.width;c.height=v.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:v}).promise;return c}
+function pad(buf,target,pre){const need=target*1024-buf.byteLength-pre.length;if(need<=0)return null;const out=new Uint8Array(buf.byteLength+pre.length+need);out.set(new Uint8Array(buf));out.set(new TextEncoder().encode(pre),buf.byteLength);out.fill(pre==='\n%'?65:0,buf.byteLength+pre.length);return out}
+const run={
+ async i2p(fs){const {jsPDF}=window.jspdf;let d;for(const [i,f] of fs.entries()){const im=await load(f);const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0);const fm=[c.width,c.height],o=c.width>c.height?'l':'p';if(!d)d=new jsPDF({unit:'px',format:fm,orientation:o,compress:true});else d.addPage(fm,o);d.addImage(c.toDataURL('image/jpeg',.92),'JPEG',0,0,c.width,c.height)}
+  row(base(fs[0].name)+'.pdf',d.output('blob'))},
+ async p2i(fs){const p=await pdfOf(fs[0]),t=$('#fmt').value,s=+$('#sc').value;for(let i=1;i<=p.numPages;i++){$('#status').textContent=`Page ${i}/${p.numPages}`;const c=await pageCanvas(await p.getPage(i),s);row(`${base(fs[0].name)}-${i}.${t=='png'?'png':'jpg'}`,await blob(c,'image/'+t,.92))}},
+ async ci(fs){const q=$('#q').value/100,mw=+$('#mw').value;for(const f of fs){const im=await load(f);let w=im.naturalWidth,h=im.naturalHeight;if(mw&&w>mw){h=h*mw/w;w=mw}const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);const b=await blob(c,'image/jpeg',q);row(base(f.name)+'-compressed.jpg',b,` (was ${kb(f.size)})`)}},
+ async cp(fs){const {jsPDF}=window.jspdf,f=fs[0],p=await pdfOf(f),q=$('#q').value/100,s=+$('#sc').value;let d;for(let i=1;i<=p.numPages;i++){$('#status').textContent=`Page ${i}/${p.numPages}`;const pg=await p.getPage(i),v=pg.getViewport({scale:1}),fm=[v.width,v.height],o=v.width>v.height?'l':'p';const c=await pageCanvas(pg,s*1.33);if(!d)d=new jsPDF({unit:'pt',format:fm,orientation:o,compress:true});else d.addPage(fm,o);d.addImage(c.toDataURL('image/jpeg',q),'JPEG',0,0,v.width,v.height)}
+  const b=d.output('blob');row(base(f.name)+'-compressed.pdf',b,b.size>=f.size?` (was ${kb(f.size)}, try lower quality)`:` (was ${kb(f.size)})`)},
+ async ip(fs){const f=fs[0],o=pad(await f.arrayBuffer(),+$('#kb').value,'\n%');if(!o)return $('#status').textContent=`File is already ${kb(f.size)}, larger than the target.`;row(base(f.name)+'-bigger.pdf',new Blob([o],{type:'application/pdf'}))},
+ async ii(fs){for(const f of fs){const o=pad(await f.arrayBuffer(),+$('#kb').value,'');if(!o){$('#status').textContent=`${f.name} is already ${kb(f.size)}, larger than the target.`;continue}row(base(f.name)+'-bigger.'+(f.name.split('.').pop()),new Blob([o],{type:f.type}))}}
+};
+$('#go').onclick=async()=>{const fs=[...$('#f').files];if(!fs.length){$('#status').textContent='Please choose a file first.';return}
+ $('#go').disabled=true;$('#out').innerHTML='';$('#status').textContent='Working...';
+ try{await run[cur](fs);if($('#status').textContent=='Working...'||$('#status').textContent.startsWith('Page'))$('#status').textContent='Done!'}catch(e){console.error(e);$('#status').textContent='Something went wrong. Is the file valid?'}
+ $('#go').disabled=false};
+show('i2p');
+</script></main></body></html>
